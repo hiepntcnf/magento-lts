@@ -1,26 +1,19 @@
 node {
- 	// Clean workspace before doing anything
-    deleteDir()
-
-    MAGENTO_DIR='magento'
-
-    try {
-        checkout scm
-
-    stage('Build') {
-        checkout scm
-        sh 'pwd && cd src && /usr/local/bin/composer install'
-    }
-        stage('Deploy') {
-        sh 'cd src && /usr/local/bin/docker-compose down'
-        sh 'cd src && /usr/local/bin/docker-compose up -d'
-        sh 'sleep 10 && cd src && /usr/local/bin/docker-compose run web php artisan migrate'
-    }
-    } catch (err) {
-        currentBuild.result = 'FAILED'
-        // Send email or another notification
-        throw err
-    }
+ 	stage('Build') { 
+            steps { 
+                sh  'echo  "BUILD STAGE"' 
+            }
+        }
+        stage('Test'){
+            steps {
+                sh  'echo  "TEST STAGE"' 
+            }
+        }
+        stage('Deploy'){
+            steps {
+                sh  'echo  "DEPLOY STAGE"' 
+            }
+        }
 }
 
 def getBranchInfo() {
