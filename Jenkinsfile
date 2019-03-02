@@ -1,19 +1,72 @@
 node {
- 	stage('Build') { 
-            steps { 
-                sh  'echo  "BUILD STAGE"' 
+ 	// Clean workspace before doing anything
+    deleteDir()
+
+    MAGENTO_DIR='magento'
+
+    try {
+        stage ('Clone') {
+        	checkout scm
+         echo "Clone"
+        }
+        stage ('Install') {
+        	echo "Install"
+        }
+        stage ('Tests') {
+            echo "Test"
+	        }
+         stage('Deploy') {
+        sh 'cd src && /usr/local/bin/docker-compose down'
+        sh 'cd src && /usr/local/bin/docker-compose up -d'
+    }
+        }
+        branchInfo = getBranchInfo()
+        if (branchInfo.type == 'develop') {
+            stage ('Artifact') {
+                sh "bin/mg2-builder artifact:transfer -Dartifact.name=${branchInfo.version} -Dremote.environment=igr -Duse.server.properties"
+            }
+            stage ('Deploy DEV') {
+                 sh "bin/mg2-builder release:deploy -Dremote.environment=igr -Drelease.version=${branchInfo.version} -Ddeploy.build.type=artifact"
             }
         }
-        stage('Test'){
-            steps {
-                sh  'echo  "TEST STAGE"' 
+        if (branchInfo.type == 'release' || branchInfo.type == 'hotfix') {
+            stage ('Confirm Deploy') {
+                confirmedServer = confirmServerToDeploy()
+            }
+            if (confirmedServer) {
+                stage ('TAG VERSION') {
+                    sh "git remote set-branches --add origin master && git remote set-branches --add origin develop && git fetch"
+                    sh "git checkout master && git checkout develop && git checkout ${BRANCH_NAME}"
+                    sh "git flow init -d"
+                    sh "bin/mg2-builder release:finish -Drelease.type=${branchInfo.type} -Drelease.version=${branchInfo.version}"
+                }
+                if (confirmedServer in ['stage','both']) {
+                    stage ('Artifact') {
+                        sh "bin/mg2-builder artifact:transfer -Dartifact.name=${branchInfo.version} -Dremote.environment=stage -Duse.server.properties"
+                    }
+                    stage ('Deploy STAGE') {
+                        sh "bin/mg2-builder release:deploy -Dremote.environment=stage -Drelease.version=${branchInfo.version} -Ddeploy.build.type=artifact"
+                    }
+                }
+                if (confirmedServer in ['production','both']) {
+                    stage ('Artifact') {
+                        sh "bin/mg2-builder artifact:transfer -Dartifact.name=${branchInfo.version} -Dremote.environment=prod -Duse.server.properties"
+                    }
+                    stage ('Deploy PROD') {
+                        sh "bin/mg2-builder release:deploy -Dremote.environment=prod -Drelease.version=${branchInfo.version} -Ddeploy.build.type=artifact"
+                    }
+                }
             }
         }
-        stage('Deploy'){
-            steps {
-                sh  'echo  "DEPLOY STAGE"' 
-            }
+      	stage ('Clean Up') {
+            sh "bin/mg2-builder util:db:clean -Dproject.name=${BRANCH_NAME} -Ddatabase.admin.username=${DATABASE_USER} -Ddatabase.admin.password=${DATABASE_PASS}"
+            deleteDir()
         }
+    } catch (err) {
+        currentBuild.result = 'FAILED'
+        // Send email or another notification
+        throw err
+    }
 }
 
 def getBranchInfo() {
