@@ -8,8 +8,7 @@ node {
     env.GENERATE_ASSETS = GENERATE_ASSETS
     env.DEPLOY = DEPLOY
 
-    try {
-
+checkout scm
       stage('Build') {
           checkout scm
       }
@@ -38,8 +37,5 @@ node {
                 }
             }
           }
-    } catch (err) {
-        currentBuild.result = 'FAILURE'
-        throw err
-    }
+  
 }
