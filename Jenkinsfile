@@ -1,14 +1,47 @@
-node { // run trên node có label là slave
-    checkout scm
+node {
+    // ENV variables
+    env.PWD = pwd()
+    env.STAGE = STAGE
+    env.TAG = TAG
+    env.REINSTALL_PROJECT = REINSTALL_PROJECT
+    env.DELETE_VENDOR = DELETE_VENDOR
+    env.GENERATE_ASSETS = GENERATE_ASSETS
+    env.DEPLOY = DEPLOY
 
-    stage('Build') {
-        checkout scm
-    }
+    try {
+      checkout scm
 
-    stage('Environment') {
-      sh 'git --version'
-      echo "Branch: ${env.BRANCH_NAME}"
-      sh 'docker -v'
-      sh 'printenv'
+      stage('Build') {
+          checkout scm
+      }
+
+      stage('Magento setup') {
+        if (!fileExists('shop')) {
+            sh "git clone ${magentoGitUrl} shop"
+        } else {
+            dir('shop') {
+                sh "git fetch origin"
+                sh "git checkout -f ${TAG}"
+                sh "git reset --hard origin/${TAG}"
+            }
+        }
+        dir('shop') {
+            sh "${phingCall} jenkins:flush-all"
+            sh "${phingCall} jenkins:setup-project"
+            sh "${phingCall} jenkins:flush-all"
+        }
+      }
+
+      stage('Deployment') {
+          if (DEPLOY == 'true') {
+            sshagent (credentials: [jenkinsSshCredentialId]) {
+                    sh "./dep deploy --tag=${TAG} ${STAGE}"
+                }
+            }
+          }
+      }
+    } catch (err) {
+        currentBuild.result = 'FAILURE'
+        throw err
     }
 }
