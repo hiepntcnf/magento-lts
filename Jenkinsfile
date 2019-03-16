@@ -9,7 +9,6 @@ node {
     env.DEPLOY = DEPLOY
 
     try {
-      checkout scm
 
       stage('Build') {
           checkout scm
