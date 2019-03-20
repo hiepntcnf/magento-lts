@@ -1,33 +1,28 @@
 node {
-
-checkout scm
-      stage('Build') {
-          checkout scm
-      }
-
-      stage('Magento setup') {
-        if (!fileExists('shop')) {
-            sh "git clone ${magentoGitUrl} shop"
-        } else {
-            dir('shop') {
-                sh "git fetch origin"
-                sh "git checkout -f ${TAG}"
-                sh "git reset --hard origin/${TAG}"
-            }
+    deleteDir()
+   try {
+        stage ('Clone') {
+        	checkout scm
         }
-        dir('shop') {
-            sh "${phingCall} jenkins:flush-all"
-            sh "${phingCall} jenkins:setup-project"
-            sh "${phingCall} jenkins:flush-all"
+        stage ('Build') {
+        	sh "echo 'shell scripts to build project...'"
         }
-      }
-
-      stage('Deployment') {
-          if (DEPLOY == 'true') {
-            sshagent (credentials: [jenkinsSshCredentialId]) {
-                    sh "./dep deploy --tag=${TAG} ${STAGE}"
-                }
-            }
-          }
-  
+        stage ('Tests') {
+	        parallel 'static': {
+	            sh "echo 'shell scripts to run static tests...'"
+	        },
+	        'unit': {
+	            sh "echo 'shell scripts to run unit tests...'"
+	        },
+	        'integration': {
+	            sh "echo 'shell scripts to run integration tests...'"
+	        }
+        }
+      	stage ('Deploy') {
+            sh "echo 'shell scripts to deploy to server...'"
+      	}
+    } catch (err) {
+        currentBuild.result = 'FAILED'
+        throw err
+    }
 }
